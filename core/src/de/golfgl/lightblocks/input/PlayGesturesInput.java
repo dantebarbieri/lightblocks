@@ -196,6 +196,7 @@ public class PlayGesturesInput extends PlayScreenInput {
             }
             clearSwipeMoves();
             swipeLastX = swipeCoordinates.x;
+            didHardDrop = false;
             swipeNextTetromino = swipeGameModel.getNextTetromino();
             swipeDrawnTetrominos = swipeGameModel.getScore().getDrawnTetrominos();
         }
@@ -310,7 +311,7 @@ public class PlayGesturesInput extends PlayScreenInput {
             return false;
 
         if (swipeMode)
-            clearSwipeInput();
+            checkSwipeInput();
         touchDownValid = screenY > Gdx.graphics.getHeight() * SCREEN_BORDER_PERCENTAGE * (isPaused() ? 2 : 1)
                 && (!isUsingOnScreenButtons() || isPaused());
 
@@ -323,7 +324,9 @@ public class PlayGesturesInput extends PlayScreenInput {
         this.screenX = screenX;
         this.screenY = screenY;
         this.timeSinceTouchDown = 0;
-        didHardDrop = false;
+        // Swipe keeps a pending hard drop until spawn, including across an immediate new touch.
+        if (!swipeMode)
+            didHardDrop = false;
 
         if (!isPaused()) {
             if (!flippedMode && !swipeMode)
@@ -335,6 +338,13 @@ public class PlayGesturesInput extends PlayScreenInput {
                     touchDownValid = false;
                     return false;
                 }
+                swipeAxis = SwipeAxis.undecided;
+                swipeRemainder = 0;
+                swipeSampleTimes.clear();
+                swipeSampleYs.clear();
+                swipeFlickDownward = false;
+                beganHorizontalMove = false;
+                beganSoftDrop = false;
                 swipeNextTetromino = swipeGameModel.getNextTetromino();
                 swipeDrawnTetrominos = swipeGameModel.getScore().getDrawnTetrominos();
                 swipeLastX = playScreen.getStage().getViewport().unproject(swipeCoordinates.set(screenX, screenY)).x;
