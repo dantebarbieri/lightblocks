@@ -322,6 +322,7 @@ public class SettingsScreen extends AbstractMenuDialog {
             onScreenControlsButton.addEntry(LocalPrefs.TouchControlType.gestures, "", app.TEXTS.get("menuUseGestureControls"));
             onScreenControlsButton.addEntry(LocalPrefs.TouchControlType.onScreenButtonsGamepad, "", app.TEXTS.get("menuUseOnScreenGamepad"));
             onScreenControlsButton.addEntry(LocalPrefs.TouchControlType.onScreenButtonsPortrait, "", app.TEXTS.get("menuUseOnScreenButtons"));
+            onScreenControlsButton.addEntry(LocalPrefs.TouchControlType.swipe, "", app.TEXTS.get("menuUseSwipeControls"));
             onScreenControlsButton.setValue(app.localPrefs.getUsedTouchControls());
             onScreenControlsButton.addListener(new ChangeListener() {
                 @Override
