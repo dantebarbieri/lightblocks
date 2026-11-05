@@ -48,9 +48,10 @@ public class PlayGesturesInput extends PlayScreenInput {
     private static final float TOUCHPAD_STICK_DEAD_RADIUS = .5f;
     private static final float TOUCHPAD_DPAD_DEAD_RADIUS = .35f;
     private static final float MAX_SOFTDROPBEGINNING_INTERVAL = .3f;
-    private static final float SWIPE_CELLS_PER_FINGER_CELL = 1f;
     private static final float SWIPE_AXIS_SLOP_CELLS = .35f;
     private static final float SWIPE_AXIS_BIAS = 1.1f;
+    private static final float SWIPE_SOFT_DROP_CELLS = 1f;
+    private static final float SWIPE_UP_THRESHOLD_CELLS = 3f;
     private static final long FLICK_SAMPLE_WINDOW_NS = 75000000L;
     private static final float FLICK_HARD_DROP_SPEED = 20f;
     private static final float FLICK_HARD_DROP_TRAVEL_CELLS = 1.5f;
@@ -295,9 +296,10 @@ public class PlayGesturesInput extends PlayScreenInput {
     }
 
     private boolean isSwipeDownFlick() {
+        float cellSize = getSwipeCellSize();
         if (!app.localPrefs.getSwipeDownHardDrop() || swipeAxis != SwipeAxis.vertical
                 || didHardDrop || !swipeFlickDownward || swipeSampleTimes.size < 2
-                || swipeStartY - swipeCoordinates.y < FLICK_HARD_DROP_TRAVEL_CELLS * BlockActor.blockWidth)
+                || swipeStartY - swipeCoordinates.y < FLICK_HARD_DROP_TRAVEL_CELLS * cellSize)
             return false;
         long startTime = swipeSampleTimes.first();
         float startY = swipeSampleYs.first();
@@ -308,7 +310,11 @@ public class PlayGesturesInput extends PlayScreenInput {
             startTime = windowStart;
         }
         float seconds = (swipeSampleTimes.peek() - startTime) / 1000000000f;
-        return seconds > 0 && (startY - swipeCoordinates.y) / BlockActor.blockWidth / seconds > FLICK_HARD_DROP_SPEED;
+        return seconds > 0 && (startY - swipeCoordinates.y) / cellSize / seconds > FLICK_HARD_DROP_SPEED;
+    }
+
+    private float getSwipeCellSize() {
+        return BlockActor.blockWidth / app.localPrefs.getSwipeSensitivity();
     }
 
     @Override
@@ -529,12 +535,13 @@ public class PlayGesturesInput extends PlayScreenInput {
 
         if (swipeMode) {
             playScreen.getStage().getViewport().unproject(swipeCoordinates.set(screenX, screenY));
+            float cellSize = getSwipeCellSize();
             if (app.localPrefs.getSwipeDownHardDrop())
                 sampleSwipeVerticalTravel(TimeUtils.nanoTime());
             if (swipeAxis == SwipeAxis.undecided) {
                 float dx = swipeCoordinates.x - swipeStartX;
                 float dy = swipeCoordinates.y - swipeStartY;
-                float slop = SWIPE_AXIS_SLOP_CELLS * BlockActor.blockWidth;
+                float slop = SWIPE_AXIS_SLOP_CELLS * cellSize;
                 if (dx * dx + dy * dy <= slop * slop)
                     return true;
                 swipeAxis = Math.abs(dy) > Math.abs(dx) * SWIPE_AXIS_BIAS
@@ -551,10 +558,10 @@ public class PlayGesturesInput extends PlayScreenInput {
                         if (direction != swipeDirection)
                             swipeRemainder = 0;
                         swipeDirection = direction;
-                        swipeRemainder += travel * SWIPE_CELLS_PER_FINGER_CELL;
-                        while (Math.abs(swipeRemainder) >= BlockActor.blockWidth) {
+                        swipeRemainder += travel;
+                        while (Math.abs(swipeRemainder) >= cellSize) {
                             swipeMoves.add(direction);
-                            swipeRemainder -= direction * BlockActor.blockWidth;
+                            swipeRemainder -= direction * cellSize;
                             beganHorizontalMove = true;
                         }
                     }
@@ -588,21 +595,25 @@ public class PlayGesturesInput extends PlayScreenInput {
             }
         }
 
-        if (!beganHorizontalMove && screenY - this.screenY > dragThreshold && !beganSoftDrop
+        float downTravel = swipeMode ? swipeStartY - swipeCoordinates.y : screenY - this.screenY;
+        float softDropThreshold = swipeMode ? SWIPE_SOFT_DROP_CELLS * getSwipeCellSize() : dragThreshold;
+        if (!beganHorizontalMove && downTravel > softDropThreshold && !beganSoftDrop
                 && timeSinceTouchDown <= MAX_SOFTDROPBEGINNING_INTERVAL) {
             beganSoftDrop = true;
             playScreen.gameModel.inputSetSoftDropFactor(inputId, GameModel.FACTOR_SOFT_DROP);
             giveHapticFeedback();
         }
         // Soft Drop sofort beenden, wenn horizontal bewegt oder wieder hochgezogen
-        if ((beganHorizontalMove || screenY - this.screenY < dragThreshold) && beganSoftDrop) {
+        if ((beganHorizontalMove || downTravel < softDropThreshold) && beganSoftDrop) {
             beganSoftDrop = false;
             playScreen.gameModel.inputSetSoftDropFactor(inputId, GameModel.FACTOR_NO_DROP);
         }
 
         int swipeUpType = app.localPrefs.getSwipeUpType();
         int swipeUpTresholdFactor = swipeUpType == SWIPEUP_PAUSE ? 4 : 3;
-        if (screenY - this.screenY < -swipeUpTresholdFactor * dragThreshold && swipeUpType != SWIPEUP_DONOTHING) {
+        float swipeUpThreshold = swipeMode ? SWIPE_UP_THRESHOLD_CELLS * getSwipeCellSize()
+                : swipeUpTresholdFactor * dragThreshold;
+        if (downTravel < -swipeUpThreshold && swipeUpType != SWIPEUP_DONOTHING) {
             if (swipeUpType == SWIPEUP_PAUSE && !isPaused())
                 playScreen.switchPause(false);
             else if (swipeUpType == SWIPEUP_HARDDROP && !didHardDrop && !beganHorizontalMove) {
@@ -618,10 +629,9 @@ public class PlayGesturesInput extends PlayScreenInput {
         }
 
         // rotate vermeiden
-        if (!didSomething && (Math.abs(screenX - this.screenX) > dragThreshold
+        if (!swipeMode && !didSomething && (Math.abs(screenX - this.screenX) > dragThreshold
                 || Math.abs(screenY - this.screenY) > dragThreshold)) {
-            if (!swipeMode)
-                playScreen.gameModel.setInputFreezeInterval(0);
+            playScreen.gameModel.setInputFreezeInterval(0);
             didSomething = true;
         }
 
