@@ -152,7 +152,7 @@ public class PlayGesturesInput extends PlayScreenInput {
             toDrop.setVisible(beganSoftDrop || timeSinceTouchDown <= MAX_SOFTDROPBEGINNING_INTERVAL);
 
         if (swipeMode && checkSwipeInput()) {
-            // Frozen update() skips one-shot flags and score time; issuing again would overwrite the pending move.
+            // Wait for frozen one-shot input to be consumed.
             if (swipeMoveIssued && swipeGameModel.getScore().getTimeMs() != swipeMoveTimeMs)
                 swipeMoveIssued = false;
             if (!swipeMoveIssued && swipeMoves.size > 0) {
@@ -172,7 +172,7 @@ public class PlayGesturesInput extends PlayScreenInput {
     }
 
     private GameModel getSwipeGameModel() {
-        // Local two-player games may assign touch to the second board.
+        // Touch may control the second board.
         GameModel model = playScreen.gameModel;
         if (model.getFixedInputId() == null || model.getFixedInputId().isSameInput(inputId))
             return model;
@@ -205,7 +205,7 @@ public class PlayGesturesInput extends PlayScreenInput {
 
     private void clearSwipeMoves() {
         if (swipeMoveIssued && swipeGameModel != null && swipeGameModel.getScore().getTimeMs() == swipeMoveTimeMs) {
-            // Frozen one-shot flags must not survive cancellation or move a newly spawned piece.
+            // Cancel unconsumed one-shot input.
             playScreen.gameModel.inputEndMoveHorizontal(inputId, true);
             playScreen.gameModel.inputEndMoveHorizontal(inputId, false);
         }
@@ -217,7 +217,6 @@ public class PlayGesturesInput extends PlayScreenInput {
     private void clearSwipeInput() {
         clearSwipeMoves();
         if (swipeGameModel != null) {
-            // Stop this piece's drop on cancellation without clearing the next piece's input.
             if ((beganSoftDrop || didHardDrop)
                     && swipeNextTetromino == swipeGameModel.getNextTetromino()
                     && swipeDrawnTetrominos == swipeGameModel.getScore().getDrawnTetrominos())
@@ -246,7 +245,7 @@ public class PlayGesturesInput extends PlayScreenInput {
             swipeFlickDownward = swipeCoordinates.y < swipeSampleYs.peek();
         swipeSampleTimes.add(time);
         swipeSampleYs.add(swipeCoordinates.y);
-        // Retain one sample before the window so its boundary can be interpolated.
+        // Keep one sample before the window for interpolation.
         while (swipeSampleTimes.size > 2 && swipeSampleTimes.get(1) <= time - FLICK_SAMPLE_WINDOW_NS) {
             swipeSampleTimes.removeIndex(0);
             swipeSampleYs.removeIndex(0);
@@ -272,7 +271,6 @@ public class PlayGesturesInput extends PlayScreenInput {
     }
 
     private float getSwipeCellSize() {
-        // Stage units (one board cell / sensitivity), not screen pixels; compare with unprojected coordinates.
         return BlockActor.blockWidth / app.localPrefs.getSwipeSensitivity();
     }
 
@@ -325,7 +323,6 @@ public class PlayGesturesInput extends PlayScreenInput {
         this.screenX = screenX;
         this.screenY = screenY;
         this.timeSinceTouchDown = 0;
-        // Swipe keeps a pending hard drop until spawn, including across an immediate new touch.
         if (!swipeMode)
             didHardDrop = false;
 
@@ -511,7 +508,6 @@ public class PlayGesturesInput extends PlayScreenInput {
                 swipeLastX = swipeCoordinates.x;
                 if (travel != 0) {
                     int direction = travel < 0 ? -1 : 1;
-                    // Reversal starts measuring fresh travel, without an old fraction delaying it.
                     if (swipeRemainder * direction < 0)
                         swipeRemainder = 0;
                     swipeRemainder += travel;
@@ -552,7 +548,6 @@ public class PlayGesturesInput extends PlayScreenInput {
 
         float downTravel = swipeMode ? swipeStartY - swipeCoordinates.y : screenY - this.screenY;
         float softDropThreshold = swipeMode ? SWIPE_SOFT_DROP_CELLS * getSwipeCellSize() : dragThreshold;
-        // Swipe intentionally keeps the classic 300 ms soft-drop-start window.
         if (!beganHorizontalMove && downTravel > softDropThreshold && !beganSoftDrop
                 && timeSinceTouchDown <= MAX_SOFTDROPBEGINNING_INTERVAL) {
             beganSoftDrop = true;
@@ -585,7 +580,7 @@ public class PlayGesturesInput extends PlayScreenInput {
         }
 
         // rotate vermeiden
-        if (!swipeMode && !didSomething && (Math.abs(screenX - this.screenX) > dragThreshold
+        if (!didSomething && (Math.abs(screenX - this.screenX) > dragThreshold
                 || Math.abs(screenY - this.screenY) > dragThreshold)) {
             playScreen.gameModel.setInputFreezeInterval(0);
             didSomething = true;
@@ -602,7 +597,6 @@ public class PlayGesturesInput extends PlayScreenInput {
             return false;
 
         if (swipeMode) {
-            // Include the release position in final cell travel and flick sampling.
             touchDragged(screenX, screenY, pointer);
             if (!touchDownValid || !checkSwipeInput())
                 return true;
@@ -613,9 +607,7 @@ public class PlayGesturesInput extends PlayScreenInput {
             }
         }
 
-        // Classic clears its 100 ms touch-down freeze; Swipe never starts that freeze.
-        if (!swipeMode)
-            playScreen.gameModel.setInputFreezeInterval(0);
+        playScreen.gameModel.setInputFreezeInterval(0);
 
         if (touchPanel != null)
             touchPanel.setVisible(false);
