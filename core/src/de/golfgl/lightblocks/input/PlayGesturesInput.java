@@ -2,9 +2,6 @@ package de.golfgl.lightblocks.input;
 
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
-import com.badlogic.gdx.InputAdapter;
-import com.badlogic.gdx.InputMultiplexer;
-import com.badlogic.gdx.InputProcessor;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.scenes.scene2d.Actor;
@@ -104,16 +101,6 @@ public class PlayGesturesInput extends PlayScreenInput {
     private int swipeDirection;
     private boolean swipeMoveIssued;
     private int swipeMoveTimeMs;
-    private InputMultiplexer swipeKeyboardObserver;
-    private InputMultiplexer swipeControllerObserver;
-    private final InputAdapter swipeInputObserver = new InputAdapter() {
-        @Override
-        public boolean keyDown(int keycode) {
-            if (swipeGameModel != null && swipeGameModel.getFixedInputId() == null)
-                clearSwipeInput();
-            return false;
-        }
-    };
 
     @Override
     public String getInputHelpText() {
@@ -128,10 +115,8 @@ public class PlayGesturesInput extends PlayScreenInput {
 
     @Override
     public void setPlayScreen(PlayScreen playScreen, LightBlocksGame app) {
-        if (swipeMode) {
+        if (swipeMode)
             clearSwipeInput();
-            removeSwipeInputObservers();
-        }
         super.setPlayScreen(playScreen, app);
 
         dragThreshold = app.localPrefs.getTouchPanelSize(app.getDisplayDensityRatio());
@@ -154,8 +139,6 @@ public class PlayGesturesInput extends PlayScreenInput {
 
     @Override
     public boolean doPoll(float delta) {
-        if (swipeMode && app.getScreen() == playScreen)
-            installSwipeInputObservers();
         if (!isUsingOnScreenButtons()) {
             gestureOnScreenControls.setVisible(!isPaused() && !buttonsHidden);
         } else if (gamepadOnScreenControls != null) {
@@ -199,38 +182,12 @@ public class PlayGesturesInput extends PlayScreenInput {
                 || secondModel.getFixedInputId().isSameInput(inputId)) ? secondModel : null;
     }
 
-    private void installSwipeInputObservers() {
-        // Observe transitions before their handlers write model flags; never consume their events.
-        InputProcessor keyboard = Gdx.input.getInputProcessor();
-        if (keyboard != null && keyboard != swipeKeyboardObserver) {
-            swipeKeyboardObserver = new InputMultiplexer(swipeInputObserver, keyboard);
-            Gdx.input.setInputProcessor(swipeKeyboardObserver);
-        }
-        if (app.controllerMappings != null) {
-            InputProcessor controller = app.controllerMappings.controllerToInputAdapter.getInputProcessor();
-            if (controller != null && controller != swipeControllerObserver) {
-                swipeControllerObserver = new InputMultiplexer(swipeInputObserver, controller);
-                app.controllerMappings.setInputProcessor(swipeControllerObserver);
-            }
-        }
-    }
-
-    private void removeSwipeInputObservers() {
-        if (swipeKeyboardObserver != null && Gdx.input.getInputProcessor() == swipeKeyboardObserver)
-            Gdx.input.setInputProcessor(swipeKeyboardObserver.getProcessors().get(1));
-        if (swipeControllerObserver != null && app.controllerMappings != null
-                && app.controllerMappings.controllerToInputAdapter.getInputProcessor() == swipeControllerObserver)
-            app.controllerMappings.setInputProcessor(swipeControllerObserver.getProcessors().get(1));
-        swipeKeyboardObserver = null;
-        swipeControllerObserver = null;
-    }
-
     private boolean checkSwipeInput() {
         if (swipeGameModel == null)
             return false;
         if (isPaused() || app.getScreen() != playScreen
                 || app.localPrefs.getUsedTouchControls() != LocalPrefs.TouchControlType.swipe
-                || swipeGameModel.getFixedInputId() == null && (buttonsHidden || Gdx.input.isKeyPressed(Input.Keys.ANY_KEY))
+                || swipeGameModel.getFixedInputId() == null && buttonsHidden
                 || swipeGameModel != getSwipeGameModel() || swipeGameModel.isGameOver()
                 || swipeNextTetromino != swipeGameModel.getNextTetromino()
                 || swipeDrawnTetrominos != swipeGameModel.getScore().getDrawnTetrominos()) {
@@ -315,15 +272,6 @@ public class PlayGesturesInput extends PlayScreenInput {
 
     private float getSwipeCellSize() {
         return BlockActor.blockWidth / app.localPrefs.getSwipeSensitivity();
-    }
-
-    @Override
-    public void dispose() {
-        if (swipeMode) {
-            clearSwipeInput();
-            removeSwipeInputObservers();
-        }
-        super.dispose();
     }
 
     @Override
