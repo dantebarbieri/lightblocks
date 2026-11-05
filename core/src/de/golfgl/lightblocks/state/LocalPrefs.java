@@ -757,7 +757,7 @@ public class LocalPrefs {
     }
 
     public enum TouchControlType {
-        gestures, onScreenButtonsGamepad, onScreenButtonsPortrait;
+        gestures, onScreenButtonsGamepad, onScreenButtonsPortrait, swipe;
 
         static TouchControlType fromInteger(int type) {
             switch (type) {
@@ -765,6 +765,8 @@ public class LocalPrefs {
                     return onScreenButtonsGamepad;
                 case 2:
                     return onScreenButtonsPortrait;
+                case 3:
+                    return swipe;
                 default:
                     return gestures;
             }
@@ -778,6 +780,8 @@ public class LocalPrefs {
                     return 1;
                 case onScreenButtonsPortrait:
                     return 2;
+                case swipe:
+                    return 3;
             }
             return -1;
         }
