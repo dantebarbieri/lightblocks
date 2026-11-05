@@ -94,7 +94,6 @@ public class PlayGesturesInput extends PlayScreenInput {
     private Tetromino swipeNextTetromino;
     private int swipeDrawnTetrominos;
     private SwipeAxis swipeAxis = SwipeAxis.undecided;
-    private float swipeStartX;
     private float swipeStartY;
     private float swipeLastX;
     private float swipeRemainder;
@@ -226,21 +225,13 @@ public class PlayGesturesInput extends PlayScreenInput {
     }
 
     private void sampleSwipeVerticalTravel(long time) {
-        if (swipeSampleTimes.size > 0) {
-            long lastTime = swipeSampleTimes.peek();
-            if (time < lastTime) {
-                swipeSampleTimes.clear();
-                swipeSampleYs.clear();
-                swipeFlickDownward = false;
-            } else {
-                if (swipeCoordinates.y != swipeSampleYs.peek())
-                    swipeFlickDownward = swipeCoordinates.y < swipeSampleYs.peek();
-                if (time == lastTime) {
-                    swipeSampleYs.set(swipeSampleYs.size - 1, swipeCoordinates.y);
-                    return;
-                }
-            }
+        if (swipeSampleTimes.size > 0 && time < swipeSampleTimes.peek()) {
+            swipeSampleTimes.clear();
+            swipeSampleYs.clear();
+            swipeFlickDownward = false;
         }
+        if (swipeSampleYs.size > 0 && swipeCoordinates.y != swipeSampleYs.peek())
+            swipeFlickDownward = swipeCoordinates.y < swipeSampleYs.peek();
         swipeSampleTimes.add(time);
         swipeSampleYs.add(swipeCoordinates.y);
         // Retain one sample before the window so its boundary can be interpolated.
@@ -336,7 +327,6 @@ public class PlayGesturesInput extends PlayScreenInput {
                 swipeNextTetromino = swipeGameModel.getNextTetromino();
                 swipeDrawnTetrominos = swipeGameModel.getScore().getDrawnTetrominos();
                 swipeLastX = playScreen.getStage().getViewport().unproject(swipeCoordinates.set(screenX, screenY)).x;
-                swipeStartX = swipeLastX;
                 swipeStartY = swipeCoordinates.y;
                 if (app.localPrefs.getSwipeDownHardDrop())
                     sampleSwipeVerticalTravel(TimeUtils.nanoTime());
@@ -485,7 +475,7 @@ public class PlayGesturesInput extends PlayScreenInput {
             if (app.localPrefs.getSwipeDownHardDrop())
                 sampleSwipeVerticalTravel(TimeUtils.nanoTime());
             if (swipeAxis == SwipeAxis.undecided) {
-                float dx = swipeCoordinates.x - swipeStartX;
+                float dx = swipeCoordinates.x - swipeLastX;
                 float dy = swipeCoordinates.y - swipeStartY;
                 float slop = SWIPE_AXIS_SLOP_CELLS * cellSize;
                 if (dx * dx + dy * dy <= slop * slop)
@@ -495,21 +485,19 @@ public class PlayGesturesInput extends PlayScreenInput {
                 didSomething = true;
             }
             if (swipeAxis == SwipeAxis.horizontal) {
-                if (!didHardDrop) {
-                    float travel = swipeCoordinates.x - swipeLastX;
-                    swipeLastX = swipeCoordinates.x;
-                    if (travel != 0) {
-                        int direction = travel < 0 ? -1 : 1;
-                        // Reversal starts measuring fresh travel, without an old fraction delaying it.
-                        if (direction != swipeDirection)
-                            swipeRemainder = 0;
-                        swipeDirection = direction;
-                        swipeRemainder += travel;
-                        while (Math.abs(swipeRemainder) >= cellSize) {
-                            swipeMoves.add(direction);
-                            swipeRemainder -= direction * cellSize;
-                            beganHorizontalMove = true;
-                        }
+                float travel = swipeCoordinates.x - swipeLastX;
+                swipeLastX = swipeCoordinates.x;
+                if (travel != 0) {
+                    int direction = travel < 0 ? -1 : 1;
+                    // Reversal starts measuring fresh travel, without an old fraction delaying it.
+                    if (direction != swipeDirection)
+                        swipeRemainder = 0;
+                    swipeDirection = direction;
+                    swipeRemainder += travel;
+                    while (Math.abs(swipeRemainder) >= cellSize) {
+                        swipeMoves.add(direction);
+                        swipeRemainder -= direction * cellSize;
+                        beganHorizontalMove = true;
                     }
                 }
                 return true;
@@ -632,9 +620,6 @@ public class PlayGesturesInput extends PlayScreenInput {
             touchDownValid = false;
             beganSoftDrop = false;
             swipeAxis = SwipeAxis.undecided;
-            swipeSampleTimes.clear();
-            swipeSampleYs.clear();
-            swipeFlickDownward = false;
         }
         return true;
     }
