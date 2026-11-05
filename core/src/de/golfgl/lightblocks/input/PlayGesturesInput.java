@@ -184,33 +184,46 @@ public class PlayGesturesInput extends PlayScreenInput {
     private boolean checkSwipeInput() {
         if (swipeGameModel == null)
             return false;
-        if (isPaused() || swipeGameModel.isGameOver()
-                || swipeNextTetromino != swipeGameModel.getNextTetromino()
-                || swipeDrawnTetrominos != swipeGameModel.getScore().getDrawnTetrominos()) {
+        if (isPaused() || swipeGameModel.isGameOver()) {
             clearSwipeInput();
             return false;
+        }
+        if (swipeNextTetromino != swipeGameModel.getNextTetromino()
+                || swipeDrawnTetrominos != swipeGameModel.getScore().getDrawnTetrominos()) {
+            if (swipeAxis == SwipeAxis.vertical) {
+                clearSwipeInput();
+                return false;
+            }
+            clearSwipeMoves();
+            swipeLastX = swipeCoordinates.x;
+            swipeNextTetromino = swipeGameModel.getNextTetromino();
+            swipeDrawnTetrominos = swipeGameModel.getScore().getDrawnTetrominos();
         }
         return true;
     }
 
+    private void clearSwipeMoves() {
+        if (swipeMoveIssued && swipeGameModel.getScore().getTimeMs() == swipeMoveTimeMs) {
+            // Frozen one-shot flags must not survive cancellation or move a newly spawned piece.
+            playScreen.gameModel.inputEndMoveHorizontal(inputId, true);
+            playScreen.gameModel.inputEndMoveHorizontal(inputId, false);
+        }
+        swipeMoves.clear();
+        swipeMoveIssued = false;
+        swipeRemainder = 0;
+    }
+
     private void clearSwipeInput() {
+        clearSwipeMoves();
         if (swipeGameModel != null) {
-            if (swipeMoveIssued && swipeGameModel.getScore().getTimeMs() == swipeMoveTimeMs) {
-                // Cancel an unconsumed column before pause or a new touch can leave it pending.
-                playScreen.gameModel.inputEndMoveHorizontal(inputId, true);
-                playScreen.gameModel.inputEndMoveHorizontal(inputId, false);
-            }
             // Stop this piece's drop on cancellation without clearing the next piece's input.
             if ((beganSoftDrop || didHardDrop)
                     && swipeNextTetromino == swipeGameModel.getNextTetromino()
                     && swipeDrawnTetrominos == swipeGameModel.getScore().getDrawnTetrominos())
                 playScreen.gameModel.inputSetSoftDropFactor(inputId, GameModel.FACTOR_NO_DROP);
         }
-        swipeMoves.clear();
         swipeGameModel = null;
         swipeNextTetromino = null;
-        swipeMoveIssued = false;
-        swipeRemainder = 0;
         swipeAxis = SwipeAxis.undecided;
         swipeSampleTimes.clear();
         swipeSampleYs.clear();
