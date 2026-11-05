@@ -46,6 +46,8 @@ public class PlayGesturesInput extends PlayScreenInput {
     private static final float TOUCHPAD_DPAD_DEAD_RADIUS = .35f;
     private static final float MAX_SOFTDROPBEGINNING_INTERVAL = .3f;
     private static final float SWIPE_CELLS_PER_FINGER_CELL = 1f;
+    private static final float SWIPE_AXIS_SLOP_CELLS = .35f;
+    private static final float SWIPE_AXIS_BIAS = 1.1f;
 
     private static final float SCREEN_BORDER_PERCENTAGE = 0.1f;
     // Flipped Mode: Tap löst horizontale Bewegung aus, Swipe rotiert
@@ -84,6 +86,9 @@ public class PlayGesturesInput extends PlayScreenInput {
     private GameModel swipeGameModel;
     private Tetromino swipeNextTetromino;
     private int swipeDrawnTetrominos;
+    private SwipeAxis swipeAxis = SwipeAxis.undecided;
+    private float swipeStartX;
+    private float swipeStartY;
     private float swipeLastX;
     private float swipeRemainder;
     private int swipeDirection;
@@ -240,6 +245,7 @@ public class PlayGesturesInput extends PlayScreenInput {
         swipeMoveIssued = false;
         swipeRemainder = 0;
         swipeDirection = 0;
+        swipeAxis = SwipeAxis.undecided;
         touchDownValid = false;
         beganHorizontalMove = false;
         beganSoftDrop = false;
@@ -321,6 +327,8 @@ public class PlayGesturesInput extends PlayScreenInput {
                 swipeNextTetromino = swipeGameModel.getNextTetromino();
                 swipeDrawnTetrominos = swipeGameModel.getScore().getDrawnTetrominos();
                 swipeLastX = playScreen.getStage().getViewport().unproject(swipeCoordinates.set(screenX, screenY)).x;
+                swipeStartX = swipeLastX;
+                swipeStartY = swipeCoordinates.y;
             } else
                 setTouchPanel(screenX, screenY);
             didSomething = false;
@@ -460,27 +468,43 @@ public class PlayGesturesInput extends PlayScreenInput {
         if (swipeMode && !checkSwipeInput())
             return false;
 
-        // Horizontale Bewegung  bemerken - aber nur wenn kein Hard Drop eingeleitet!
-        if (!didHardDrop) {
-            if (swipeMode) {
-                float x = playScreen.getStage().getViewport().unproject(swipeCoordinates.set(screenX, screenY)).x;
-                float travel = x - swipeLastX;
-                swipeLastX = x;
-                if (travel != 0) {
-                    int direction = travel < 0 ? -1 : 1;
-                    // Reversal starts measuring fresh travel, without an old fraction delaying it.
-                    if (direction != swipeDirection)
-                        swipeRemainder = 0;
-                    swipeDirection = direction;
-                    swipeRemainder += travel * SWIPE_CELLS_PER_FINGER_CELL;
-                    while (Math.abs(swipeRemainder) >= BlockActor.blockWidth) {
-                        swipeMoves.add(direction);
-                        swipeRemainder -= direction * BlockActor.blockWidth;
-                        beganHorizontalMove = true;
-                        didSomething = true;
+        if (swipeMode) {
+            playScreen.getStage().getViewport().unproject(swipeCoordinates.set(screenX, screenY));
+            if (swipeAxis == SwipeAxis.undecided) {
+                float dx = swipeCoordinates.x - swipeStartX;
+                float dy = swipeCoordinates.y - swipeStartY;
+                float slop = SWIPE_AXIS_SLOP_CELLS * BlockActor.blockWidth;
+                if (dx * dx + dy * dy <= slop * slop)
+                    return true;
+                swipeAxis = Math.abs(dy) > Math.abs(dx) * SWIPE_AXIS_BIAS
+                        ? SwipeAxis.vertical : SwipeAxis.horizontal;
+                didSomething = true;
+            }
+            if (swipeAxis == SwipeAxis.horizontal) {
+                if (!didHardDrop) {
+                    float travel = swipeCoordinates.x - swipeLastX;
+                    swipeLastX = swipeCoordinates.x;
+                    if (travel != 0) {
+                        int direction = travel < 0 ? -1 : 1;
+                        // Reversal starts measuring fresh travel, without an old fraction delaying it.
+                        if (direction != swipeDirection)
+                            swipeRemainder = 0;
+                        swipeDirection = direction;
+                        swipeRemainder += travel * SWIPE_CELLS_PER_FINGER_CELL;
+                        while (Math.abs(swipeRemainder) >= BlockActor.blockWidth) {
+                            swipeMoves.add(direction);
+                            swipeRemainder -= direction * BlockActor.blockWidth;
+                            beganHorizontalMove = true;
+                        }
                     }
                 }
-            } else if (!flippedMode) {
+                return true;
+            }
+        }
+
+        // Horizontale Bewegung  bemerken - aber nur wenn kein Hard Drop eingeleitet!
+        if (!swipeMode && !didHardDrop) {
+            if (!flippedMode) {
                 int currentHorizontalTreshold = (beganSoftDrop ? 2 * dragThreshold : dragThreshold);
                 if ((!beganHorizontalMove) && (Math.abs(screenX - this.screenX) > currentHorizontalTreshold)) {
                     beganHorizontalMove = true;
@@ -548,6 +572,12 @@ public class PlayGesturesInput extends PlayScreenInput {
         if (swipeMode && !checkSwipeInput())
             return false;
 
+        if (swipeMode) {
+            touchDragged(screenX, screenY, pointer);
+            if (!touchDownValid || !checkSwipeInput())
+                return true;
+        }
+
         if (!swipeMode)
             playScreen.gameModel.setInputFreezeInterval(0);
 
@@ -577,6 +607,7 @@ public class PlayGesturesInput extends PlayScreenInput {
         if (swipeMode) {
             touchDownValid = false;
             beganSoftDrop = false;
+            swipeAxis = SwipeAxis.undecided;
         }
         return true;
     }
@@ -600,6 +631,10 @@ public class PlayGesturesInput extends PlayScreenInput {
         if (swipeMode && buttonsHidden && (swipeGameModel == null || swipeGameModel.getFixedInputId() == null))
             clearSwipeInput();
         this.buttonsHidden = buttonsHidden;
+    }
+
+    private enum SwipeAxis {
+        undecided, horizontal, vertical
     }
 
     public static class FreezeButton extends Button {
