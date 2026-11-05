@@ -313,6 +313,7 @@ public class SettingsScreen extends AbstractMenuDialog {
         Group touchPanel;
         private final Slider touchPanelSizeSlider;
         private final Table gestureSettings;
+        private final Cell<Button> touchPanelCell;
         private final Button swipeDownHardDropCheckbox;
         private final Cell<Button> swipeDownHardDropCell;
         private final Table onScreenGamepadSettings;
@@ -390,7 +391,7 @@ public class SettingsScreen extends AbstractMenuDialog {
             add(touchControlTypeTable);
 
             gestureSettings = new Table();
-            gestureSettings.add(touchPanelButton).bottom();
+            touchPanelCell = gestureSettings.add(touchPanelButton).bottom();
 
             Table touchPanelTable = new Table();
             touchPanelTable.add(new ScaledLabel(app.TEXTS.get("menuSizeOfTouchPanel"), app.skin, LightBlocksGame.SKIN_FONT_REG,
@@ -541,8 +542,9 @@ public class SettingsScreen extends AbstractMenuDialog {
 
         protected void setSettingsTableActor() {
             boolean swipe = app.localPrefs.getUsedTouchControls() == LocalPrefs.TouchControlType.swipe;
+            touchPanelCell.getActor().setVisible(!swipe);
+            touchPanelCell.height(swipe ? 0 : touchPanelCell.getActor().getPrefHeight());
             swipeDownHardDropCell.setActor(swipe ? swipeDownHardDropCheckbox : null);
-            swipeDownHardDropCell.padTop(swipe ? 5 : 0);
             Actor actor;
             switch (app.localPrefs.getUsedTouchControls()) {
                 case onScreenButtonsGamepad:
