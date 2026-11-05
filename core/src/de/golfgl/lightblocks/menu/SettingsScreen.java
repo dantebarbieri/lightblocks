@@ -313,9 +313,15 @@ public class SettingsScreen extends AbstractMenuDialog {
         Group touchPanel;
         private final Slider touchPanelSizeSlider;
         private final Table gestureSettings;
-        private final Cell<Button> touchPanelCell;
+        private final Table swipeSettings;
+        private final Slider swipeSensitivitySlider;
         private final Button swipeDownHardDropCheckbox;
-        private final Cell<Button> swipeDownHardDropCell;
+        private final FaRadioButton<Integer> swipeUpButtons;
+        private final Button hideHoldCheckbox;
+        private final Button invertRotationCheckbox;
+        private final FaRadioButton<Integer> swipeSettingsUpButtons;
+        private final GlowLabelButton swipeHideHoldCheckbox;
+        private final Button swipeInvertRotationCheckbox;
         private final Table onScreenGamepadSettings;
         private final Table onScreenButtonSettings;
 
@@ -352,7 +358,7 @@ public class SettingsScreen extends AbstractMenuDialog {
                     touchPanelSizeChanged();
                 }
             });
-            final FaRadioButton<Integer> swipeUpButtons = createSwipeUpButtons();
+            swipeUpButtons = createSwipeUpButtons();
 
             pad(0, 20, 0, 20);
             defaults().expand().fillX();
@@ -378,7 +384,7 @@ public class SettingsScreen extends AbstractMenuDialog {
             add(touchControlTypeTable);
 
             gestureSettings = new Table();
-            touchPanelCell = gestureSettings.add(touchPanelButton).bottom();
+            gestureSettings.add(touchPanelButton).bottom();
 
             Table touchPanelTable = new Table();
             touchPanelTable.add(new ScaledLabel(app.TEXTS.get("menuSizeOfTouchPanel"), app.skin, LightBlocksGame.SKIN_FONT_REG,
@@ -394,13 +400,27 @@ public class SettingsScreen extends AbstractMenuDialog {
             gestureSettings.add(swipeUp);
 
             gestureSettings.row().padTop(5);
-            final Button hideHoldCheckbox = createHideHoldCheckbox();
+            hideHoldCheckbox = createHideHoldCheckbox();
             gestureSettings.add(hideHoldCheckbox);
 
-            final Button invertRotationCheckbox = createInvertRotationCheckbox();
+            invertRotationCheckbox = createInvertRotationCheckbox();
 
             gestureSettings.row().padTop(-10);
             gestureSettings.add(invertRotationCheckbox);
+
+            swipeSensitivitySlider = new TouchableSlider(.6f, 1.6f, .1f, false, app.skin);
+            swipeSensitivitySlider.setValue(app.localPrefs.getSwipeSensitivity());
+            swipeSensitivitySlider.addListener(new ChangeListener() {
+                @Override
+                public void changed(ChangeEvent event, Actor actor) {
+                    app.localPrefs.setSwipeSensitivity(swipeSensitivitySlider.getValue());
+                }
+            });
+            Table sensitivitySettings = new Table();
+            sensitivitySettings.add(new ScaledLabel(app.TEXTS.get("menuSwipeSensitivity"), app.skin,
+                    LightBlocksGame.SKIN_FONT_TITLE));
+            sensitivitySettings.row();
+            sensitivitySettings.add(swipeSensitivitySlider).minHeight(40).fill();
 
             swipeDownHardDropCheckbox = new FaCheckbox(app.TEXTS.get("menuSwipeDownHardDrop"), app.skin);
             swipeDownHardDropCheckbox.setChecked(app.localPrefs.getSwipeDownHardDrop());
@@ -410,8 +430,20 @@ public class SettingsScreen extends AbstractMenuDialog {
                     app.localPrefs.setSwipeDownHardDrop(swipeDownHardDropCheckbox.isChecked());
                 }
             });
-            gestureSettings.row();
-            swipeDownHardDropCell = gestureSettings.add();
+            swipeSettingsUpButtons = createSwipeUpButtons();
+            swipeHideHoldCheckbox = createHideHoldCheckbox();
+            swipeInvertRotationCheckbox = createInvertRotationCheckbox();
+            swipeHideHoldCheckbox.focusToSouth = swipeInvertRotationCheckbox;
+            swipeSettings = new Table();
+            swipeSettings.add(sensitivitySettings);
+            swipeSettings.row().padTop(5);
+            swipeSettings.add(swipeDownHardDropCheckbox);
+            swipeSettings.row();
+            swipeSettings.add(createSwipeUpSettings(swipeSettingsUpButtons));
+            swipeSettings.row().padTop(5);
+            swipeSettings.add(swipeHideHoldCheckbox);
+            swipeSettings.row().padTop(-10);
+            swipeSettings.add(swipeInvertRotationCheckbox);
 
             Button osbHelp = new RoundedTextButton(app.TEXTS.get("buttonHowToPlay"), app.skin);
             addFocusableActor(osbHelp);
@@ -486,7 +518,7 @@ public class SettingsScreen extends AbstractMenuDialog {
             onScreenGamepadSettings.validate();
 
             row();
-            settingsTableCell = add().height(gestureSettings.getPrefHeight()).fillX();
+            settingsTableCell = add().fillX();
             setSettingsTableActor();
 
             addFocusableActor(onScreenControlsButton);
@@ -495,7 +527,11 @@ public class SettingsScreen extends AbstractMenuDialog {
             addFocusableActor(swipeUpButtons);
             addFocusableActor(hideHoldCheckbox);
             addFocusableActor(invertRotationCheckbox);
+            addFocusableActor(swipeSensitivitySlider);
             addFocusableActor(swipeDownHardDropCheckbox);
+            addFocusableActor(swipeSettingsUpButtons);
+            addFocusableActor(swipeHideHoldCheckbox);
+            addFocusableActor(swipeInvertRotationCheckbox);
             addFocusableActor(showOsgHardDropButtonCheckbox);
             addFocusableActor(visualizePadStyle);
             addFocusableActor(opacitySlider);
@@ -536,8 +572,8 @@ public class SettingsScreen extends AbstractMenuDialog {
             return swipeUp;
         }
 
-        private Button createHideHoldCheckbox() {
-            final Button hideHoldCheckbox = new FaCheckbox(app.TEXTS.get("menuHideHoldButton"), app.skin);
+        private GlowLabelButton createHideHoldCheckbox() {
+            final GlowLabelButton hideHoldCheckbox = new FaCheckbox(app.TEXTS.get("menuHideHoldButton"), app.skin);
             hideHoldCheckbox.setChecked(!app.localPrefs.isShowTouchHoldButton());
             hideHoldCheckbox.addListener(new ChangeListener() {
                 @Override
@@ -561,10 +597,14 @@ public class SettingsScreen extends AbstractMenuDialog {
         }
 
         protected void setSettingsTableActor() {
-            boolean swipe = app.localPrefs.getUsedTouchControls() == LocalPrefs.TouchControlType.swipe;
-            touchPanelCell.getActor().setVisible(!swipe);
-            touchPanelCell.height(swipe ? 0 : touchPanelCell.getActor().getPrefHeight());
-            swipeDownHardDropCell.setActor(swipe ? swipeDownHardDropCheckbox : null);
+            swipeUpButtons.setValue(app.localPrefs.getSwipeUpType());
+            swipeSettingsUpButtons.setValue(app.localPrefs.getSwipeUpType());
+            hideHoldCheckbox.setChecked(!app.localPrefs.isShowTouchHoldButton());
+            swipeHideHoldCheckbox.setChecked(!app.localPrefs.isShowTouchHoldButton());
+            invertRotationCheckbox.setChecked(app.localPrefs.isInvertGesturesRotation());
+            swipeInvertRotationCheckbox.setChecked(app.localPrefs.isInvertGesturesRotation());
+            swipeSensitivitySlider.setValue(app.localPrefs.getSwipeSensitivity());
+            swipeDownHardDropCheckbox.setChecked(app.localPrefs.getSwipeDownHardDrop());
             Actor actor;
             switch (app.localPrefs.getUsedTouchControls()) {
                 case onScreenButtonsGamepad:
@@ -573,11 +613,15 @@ public class SettingsScreen extends AbstractMenuDialog {
                 case onScreenButtonsPortrait:
                     actor = onScreenButtonSettings;
                     break;
+                case swipe:
+                    actor = swipeSettings;
+                    break;
                 default:
                     actor = gestureSettings;
             }
             settingsTableCell.setActor(actor);
-            settingsTableCell.height(gestureSettings.getPrefHeight());
+            settingsTableCell.height(Math.max(Math.max(gestureSettings.getPrefHeight(), swipeSettings.getPrefHeight()),
+                    Math.max(onScreenGamepadSettings.getPrefHeight(), onScreenButtonSettings.getPrefHeight())));
         }
 
         protected void touchPanelSizeChanged() {
