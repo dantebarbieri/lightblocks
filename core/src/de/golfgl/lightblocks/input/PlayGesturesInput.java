@@ -2,6 +2,9 @@ package de.golfgl.lightblocks.input;
 
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
+import com.badlogic.gdx.InputAdapter;
+import com.badlogic.gdx.InputMultiplexer;
+import com.badlogic.gdx.InputProcessor;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.scenes.scene2d.Actor;
@@ -14,6 +17,7 @@ import com.badlogic.gdx.scenes.scene2d.ui.Label;
 import com.badlogic.gdx.scenes.scene2d.ui.Touchpad;
 import com.badlogic.gdx.scenes.scene2d.utils.ChangeListener;
 import com.badlogic.gdx.utils.Align;
+import com.badlogic.gdx.utils.IntArray;
 
 import de.golfgl.gdxgameanalytics.GameAnalytics;
 import de.golfgl.lightblocks.LightBlocksGame;
@@ -28,7 +32,7 @@ import de.golfgl.lightblocks.screen.PlayScreen;
 import de.golfgl.lightblocks.state.LocalPrefs;
 
 /**
- * This class controls touch input for gestures, on screen gamepad and on screen buttons
+ * This class controls touch input for gestures, swipe, on screen gamepad and on screen buttons
  * <p>
  * Created by Benjamin Schulte on 25.01.2017.
  */
@@ -41,6 +45,7 @@ public class PlayGesturesInput extends PlayScreenInput {
     private static final float TOUCHPAD_STICK_DEAD_RADIUS = .5f;
     private static final float TOUCHPAD_DPAD_DEAD_RADIUS = .35f;
     private static final float MAX_SOFTDROPBEGINNING_INTERVAL = .3f;
+    private static final float SWIPE_CELLS_PER_FINGER_CELL = 1f;
 
     private static final float SCREEN_BORDER_PERCENTAGE = 0.1f;
     // Flipped Mode: Tap löst horizontale Bewegung aus, Swipe rotiert
@@ -73,6 +78,27 @@ public class PlayGesturesInput extends PlayScreenInput {
     private boolean invertRotation;
     private GestureOnScreenButtons gestureOnScreenControls;
     private boolean buttonsHidden;
+    private boolean swipeMode;
+    private final IntArray swipeMoves = new IntArray();
+    private final Vector2 swipeCoordinates = new Vector2();
+    private GameModel swipeGameModel;
+    private Tetromino swipeNextTetromino;
+    private int swipeDrawnTetrominos;
+    private float swipeLastX;
+    private float swipeRemainder;
+    private int swipeDirection;
+    private boolean swipeMoveIssued;
+    private int swipeMoveTimeMs;
+    private InputMultiplexer swipeKeyboardObserver;
+    private InputMultiplexer swipeControllerObserver;
+    private final InputAdapter swipeInputObserver = new InputAdapter() {
+        @Override
+        public boolean keyDown(int keycode) {
+            if (swipeGameModel != null && swipeGameModel.getFixedInputId() == null)
+                clearSwipeInput();
+            return false;
+        }
+    };
 
     @Override
     public String getInputHelpText() {
@@ -87,13 +113,18 @@ public class PlayGesturesInput extends PlayScreenInput {
 
     @Override
     public void setPlayScreen(PlayScreen playScreen, LightBlocksGame app) {
+        if (swipeMode) {
+            clearSwipeInput();
+            removeSwipeInputObservers();
+        }
         super.setPlayScreen(playScreen, app);
 
         dragThreshold = app.localPrefs.getTouchPanelSize(app.getDisplayDensityRatio());
         tutorialMode = playScreen.gameModel instanceof TutorialModel;
+        swipeMode = !tutorialMode && app.localPrefs.getUsedTouchControls() == LocalPrefs.TouchControlType.swipe;
         invertRotation = !tutorialMode && app.localPrefs.isInvertGesturesRotation();
 
-        if (app.localPrefs.getShowTouchPanel() || tutorialMode)
+        if (!swipeMode && (app.localPrefs.getShowTouchPanel() || tutorialMode))
             initializeTouchPanel(app, dragThreshold, playScreen.getStage());
 
         if (!isUsingOnScreenButtons()) {
@@ -108,6 +139,8 @@ public class PlayGesturesInput extends PlayScreenInput {
 
     @Override
     public boolean doPoll(float delta) {
+        if (swipeMode && app.getScreen() == playScreen)
+            installSwipeInputObservers();
         if (!isUsingOnScreenButtons()) {
             gestureOnScreenControls.setVisible(!isPaused() && !buttonsHidden);
         } else if (gamepadOnScreenControls != null) {
@@ -122,12 +155,113 @@ public class PlayGesturesInput extends PlayScreenInput {
         if (toDrop != null)
             toDrop.setVisible(beganSoftDrop || timeSinceTouchDown <= MAX_SOFTDROPBEGINNING_INTERVAL);
 
+        if (swipeMode && checkSwipeInput()) {
+            // Frozen updates leave the model's one-shot flag pending. Wait until it was consumed.
+            if (swipeMoveIssued && swipeGameModel.getScore().getTimeMs() != swipeMoveTimeMs)
+                swipeMoveIssued = false;
+            if (!swipeMoveIssued && swipeMoves.size > 0) {
+                playScreen.gameModel.inputDoOneHorizontalMove(inputId, swipeMoves.removeIndex(0) < 0);
+                swipeMoveTimeMs = swipeGameModel.getScore().getTimeMs();
+                swipeMoveIssued = true;
+                giveHapticFeedback();
+            }
+        }
+
         // return hadButtonEvent to PlayKeyOrTouchInput so it can count all touch events
         if (hadButtonEvent) {
             hadButtonEvent = false;
             return true;
         }
         return false;
+    }
+
+    private GameModel getSwipeGameModel() {
+        GameModel model = playScreen.gameModel;
+        if (model.getFixedInputId() == null || model.getFixedInputId().isSameInput(inputId))
+            return model;
+        GameModel secondModel = model.getSecondGameModel();
+        return secondModel != null && (secondModel.getFixedInputId() == null
+                || secondModel.getFixedInputId().isSameInput(inputId)) ? secondModel : null;
+    }
+
+    private void installSwipeInputObservers() {
+        // Observe transitions before their handlers write model flags; never consume their events.
+        InputProcessor keyboard = Gdx.input.getInputProcessor();
+        if (keyboard != null && keyboard != swipeKeyboardObserver) {
+            swipeKeyboardObserver = new InputMultiplexer(swipeInputObserver, keyboard);
+            Gdx.input.setInputProcessor(swipeKeyboardObserver);
+        }
+        if (app.controllerMappings != null) {
+            InputProcessor controller = app.controllerMappings.controllerToInputAdapter.getInputProcessor();
+            if (controller != null && controller != swipeControllerObserver) {
+                swipeControllerObserver = new InputMultiplexer(swipeInputObserver, controller);
+                app.controllerMappings.setInputProcessor(swipeControllerObserver);
+            }
+        }
+    }
+
+    private void removeSwipeInputObservers() {
+        if (swipeKeyboardObserver != null && Gdx.input.getInputProcessor() == swipeKeyboardObserver)
+            Gdx.input.setInputProcessor(swipeKeyboardObserver.getProcessors().get(1));
+        if (swipeControllerObserver != null && app.controllerMappings != null
+                && app.controllerMappings.controllerToInputAdapter.getInputProcessor() == swipeControllerObserver)
+            app.controllerMappings.setInputProcessor(swipeControllerObserver.getProcessors().get(1));
+        swipeKeyboardObserver = null;
+        swipeControllerObserver = null;
+    }
+
+    private boolean checkSwipeInput() {
+        if (swipeGameModel == null)
+            return false;
+        if (isPaused() || app.getScreen() != playScreen
+                || app.localPrefs.getUsedTouchControls() != LocalPrefs.TouchControlType.swipe
+                || swipeGameModel.getFixedInputId() == null && (buttonsHidden || Gdx.input.isKeyPressed(Input.Keys.ANY_KEY))
+                || swipeGameModel != getSwipeGameModel() || swipeGameModel.isGameOver()
+                || swipeNextTetromino != swipeGameModel.getNextTetromino()
+                || swipeDrawnTetrominos != swipeGameModel.getScore().getDrawnTetrominos()) {
+            clearSwipeInput();
+            return false;
+        }
+        return true;
+    }
+
+    private void clearSwipeInput() {
+        if (swipeGameModel != null) {
+            if (swipeMoveIssued && swipeGameModel.getScore().getTimeMs() == swipeMoveTimeMs) {
+                playScreen.gameModel.inputEndMoveHorizontal(inputId, true);
+                playScreen.gameModel.inputEndMoveHorizontal(inputId, false);
+            }
+            if (beganSoftDrop)
+                playScreen.gameModel.inputSetSoftDropFactor(inputId, GameModel.FACTOR_NO_DROP);
+        }
+        swipeMoves.clear();
+        swipeGameModel = null;
+        swipeNextTetromino = null;
+        swipeMoveIssued = false;
+        swipeRemainder = 0;
+        swipeDirection = 0;
+        touchDownValid = false;
+        beganHorizontalMove = false;
+        beganSoftDrop = false;
+        didSomething = true;
+        if (touchPanel != null)
+            touchPanel.setVisible(false);
+    }
+
+    @Override
+    public void dispose() {
+        if (swipeMode) {
+            clearSwipeInput();
+            removeSwipeInputObservers();
+        }
+        super.dispose();
+    }
+
+    @Override
+    public void setGameOver() {
+        if (swipeMode)
+            clearSwipeInput();
+        super.setGameOver();
     }
 
     @Override
@@ -158,6 +292,8 @@ public class PlayGesturesInput extends PlayScreenInput {
         } else if (pointer != 0 || button != Input.Buttons.LEFT)
             return false;
 
+        if (swipeMode)
+            clearSwipeInput();
         touchDownValid = screenY > Gdx.graphics.getHeight() * SCREEN_BORDER_PERCENTAGE * (isPaused() ? 2 : 1)
                 && (!isUsingOnScreenButtons() || isPaused());
 
@@ -173,10 +309,20 @@ public class PlayGesturesInput extends PlayScreenInput {
         didHardDrop = false;
 
         if (!isPaused()) {
-            if (!flippedMode)
+            if (!flippedMode && !swipeMode)
                 playScreen.gameModel.setInputFreezeInterval(.1f);
 
-            setTouchPanel(screenX, screenY);
+            if (swipeMode) {
+                swipeGameModel = getSwipeGameModel();
+                if (swipeGameModel == null) {
+                    touchDownValid = false;
+                    return false;
+                }
+                swipeNextTetromino = swipeGameModel.getNextTetromino();
+                swipeDrawnTetrominos = swipeGameModel.getScore().getDrawnTetrominos();
+                swipeLastX = playScreen.getStage().getViewport().unproject(swipeCoordinates.set(screenX, screenY)).x;
+            } else
+                setTouchPanel(screenX, screenY);
             didSomething = false;
         } else if (playScreen.gameModel.isGameOver()) {
             playScreen.switchPause(false);
@@ -311,10 +457,30 @@ public class PlayGesturesInput extends PlayScreenInput {
         // Bei mehr als dragThreshold Pixeln erkennen wir eine Bewegung an...
         if (pointer != 0 || !touchDownValid)
             return false;
+        if (swipeMode && !checkSwipeInput())
+            return false;
 
         // Horizontale Bewegung  bemerken - aber nur wenn kein Hard Drop eingeleitet!
         if (!didHardDrop) {
-            if (!flippedMode) {
+            if (swipeMode) {
+                float x = playScreen.getStage().getViewport().unproject(swipeCoordinates.set(screenX, screenY)).x;
+                float travel = x - swipeLastX;
+                swipeLastX = x;
+                if (travel != 0) {
+                    int direction = travel < 0 ? -1 : 1;
+                    // Reversal starts measuring fresh travel, without an old fraction delaying it.
+                    if (direction != swipeDirection)
+                        swipeRemainder = 0;
+                    swipeDirection = direction;
+                    swipeRemainder += travel * SWIPE_CELLS_PER_FINGER_CELL;
+                    while (Math.abs(swipeRemainder) >= BlockActor.blockWidth) {
+                        swipeMoves.add(direction);
+                        swipeRemainder -= direction * BlockActor.blockWidth;
+                        beganHorizontalMove = true;
+                        didSomething = true;
+                    }
+                }
+            } else if (!flippedMode) {
                 int currentHorizontalTreshold = (beganSoftDrop ? 2 * dragThreshold : dragThreshold);
                 if ((!beganHorizontalMove) && (Math.abs(screenX - this.screenX) > currentHorizontalTreshold)) {
                     beganHorizontalMove = true;
@@ -357,7 +523,9 @@ public class PlayGesturesInput extends PlayScreenInput {
                 giveHapticFeedback();
                 didHardDrop = true;
             } else if (swipeUpType == SWIPEUP_HOLD && !beganHorizontalMove) {
-                playScreen.gameModel.inputHoldActiveTetromino(inputId);
+                boolean held = playScreen.gameModel.inputHoldActiveTetromino(inputId);
+                if (swipeMode && held)
+                    clearSwipeInput();
                 giveHapticFeedback();
             }
         }
@@ -365,7 +533,8 @@ public class PlayGesturesInput extends PlayScreenInput {
         // rotate vermeiden
         if (!didSomething && (Math.abs(screenX - this.screenX) > dragThreshold
                 || Math.abs(screenY - this.screenY) > dragThreshold)) {
-            playScreen.gameModel.setInputFreezeInterval(0);
+            if (!swipeMode)
+                playScreen.gameModel.setInputFreezeInterval(0);
             didSomething = true;
         }
 
@@ -376,8 +545,11 @@ public class PlayGesturesInput extends PlayScreenInput {
     public boolean touchUp(int screenX, int screenY, int pointer, int button) {
         if (pointer != 0 || !touchDownValid || button != Input.Buttons.LEFT)
             return false;
+        if (swipeMode && !checkSwipeInput())
+            return false;
 
-        playScreen.gameModel.setInputFreezeInterval(0);
+        if (!swipeMode)
+            playScreen.gameModel.setInputFreezeInterval(0);
 
         if (touchPanel != null)
             touchPanel.setVisible(false);
@@ -395,11 +567,17 @@ public class PlayGesturesInput extends PlayScreenInput {
             playScreen.gameModel.inputSetSoftDropFactor(inputId, GameModel.FACTOR_NO_DROP);
 
         if (beganHorizontalMove) {
-            playScreen.gameModel.inputEndMoveHorizontal(inputId, true);
-            playScreen.gameModel.inputEndMoveHorizontal(inputId, false);
+            if (!swipeMode) {
+                playScreen.gameModel.inputEndMoveHorizontal(inputId, true);
+                playScreen.gameModel.inputEndMoveHorizontal(inputId, false);
+            }
             beganHorizontalMove = false;
         }
 
+        if (swipeMode) {
+            touchDownValid = false;
+            beganSoftDrop = false;
+        }
         return true;
     }
 
@@ -419,6 +597,8 @@ public class PlayGesturesInput extends PlayScreenInput {
     }
 
     void setButtonsHidden(boolean buttonsHidden) {
+        if (swipeMode && buttonsHidden && (swipeGameModel == null || swipeGameModel.getFixedInputId() == null))
+            clearSwipeInput();
         this.buttonsHidden = buttonsHidden;
     }
 
@@ -781,6 +961,8 @@ public class PlayGesturesInput extends PlayScreenInput {
         @Override
         public boolean touchDown(InputEvent event, float x, float y, int pointer, int button) {
             if (!isPaused()) {
+                if (swipeMode)
+                    clearSwipeInput();
                 playScreen.gameModel.inputTimelabelTouched(inputId);
                 hadButtonEvent();
                 return true;
@@ -793,6 +975,8 @@ public class PlayGesturesInput extends PlayScreenInput {
         @Override
         public boolean touchDown(InputEvent event, float x, float y, int pointer, int button) {
             if (!isPaused()) {
+                if (swipeMode)
+                    clearSwipeInput();
                 playScreen.gameModel.inputHoldActiveTetromino(inputId);
                 hadButtonEvent();
                 return true;
