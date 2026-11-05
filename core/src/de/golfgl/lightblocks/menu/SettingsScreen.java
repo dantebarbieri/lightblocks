@@ -423,7 +423,7 @@ public class SettingsScreen extends AbstractMenuDialog {
             sensitivitySettings.add(swipeSensitivitySlider).minHeight(40).fill();
 
             swipeDownHardDropCheckbox = new FaCheckbox(app.TEXTS.get("menuSwipeDownHardDrop"), app.skin);
-            swipeDownHardDropCheckbox.setChecked(app.localPrefs.getSwipeDownHardDrop());
+            swipeDownHardDropCheckbox.setChecked(app.localPrefs.isSwipeDownHardDrop());
             swipeDownHardDropCheckbox.addListener(new ChangeListener() {
                 @Override
                 public void changed(ChangeEvent event, Actor actor) {
@@ -604,7 +604,7 @@ public class SettingsScreen extends AbstractMenuDialog {
             invertRotationCheckbox.setChecked(app.localPrefs.isInvertGesturesRotation());
             swipeInvertRotationCheckbox.setChecked(app.localPrefs.isInvertGesturesRotation());
             swipeSensitivitySlider.setValue(app.localPrefs.getSwipeSensitivity());
-            swipeDownHardDropCheckbox.setChecked(app.localPrefs.getSwipeDownHardDrop());
+            swipeDownHardDropCheckbox.setChecked(app.localPrefs.isSwipeDownHardDrop());
             Actor actor;
             switch (app.localPrefs.getUsedTouchControls()) {
                 case onScreenButtonsGamepad:

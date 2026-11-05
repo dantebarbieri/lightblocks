@@ -50,7 +50,7 @@ public class PlayGesturesInput extends PlayScreenInput {
     private static final float SWIPE_SOFT_DROP_CELLS = 1f;
     private static final float SWIPE_UP_THRESHOLD_CELLS = 3f;
     private static final long FLICK_SAMPLE_WINDOW_NS = 75000000L;
-    private static final float FLICK_HARD_DROP_SPEED = 20f;
+    private static final float FLICK_HARD_DROP_CELLS_PER_SECOND = 20f;
     private static final float FLICK_HARD_DROP_TRAVEL_CELLS = 1.5f;
 
     private static final float SCREEN_BORDER_PERCENTAGE = 0.1f;
@@ -204,7 +204,7 @@ public class PlayGesturesInput extends PlayScreenInput {
     }
 
     private void clearSwipeMoves() {
-        if (swipeMoveIssued && swipeGameModel.getScore().getTimeMs() == swipeMoveTimeMs) {
+        if (swipeMoveIssued && swipeGameModel != null && swipeGameModel.getScore().getTimeMs() == swipeMoveTimeMs) {
             // Frozen one-shot flags must not survive cancellation or move a newly spawned piece.
             playScreen.gameModel.inputEndMoveHorizontal(inputId, true);
             playScreen.gameModel.inputEndMoveHorizontal(inputId, false);
@@ -255,7 +255,7 @@ public class PlayGesturesInput extends PlayScreenInput {
 
     private boolean isSwipeDownFlick() {
         float cellSize = getSwipeCellSize();
-        if (!app.localPrefs.getSwipeDownHardDrop() || swipeAxis != SwipeAxis.vertical
+        if (!app.localPrefs.isSwipeDownHardDrop() || swipeAxis != SwipeAxis.vertical
                 || didHardDrop || !swipeFlickDownward || swipeSampleTimes.size < 2
                 || swipeStartY - swipeCoordinates.y < FLICK_HARD_DROP_TRAVEL_CELLS * cellSize)
             return false;
@@ -268,10 +268,11 @@ public class PlayGesturesInput extends PlayScreenInput {
             startTime = windowStart;
         }
         float seconds = (swipeSampleTimes.peek() - startTime) / 1000000000f;
-        return seconds > 0 && (startY - swipeCoordinates.y) / cellSize / seconds > FLICK_HARD_DROP_SPEED;
+        return seconds > 0 && (startY - swipeCoordinates.y) / cellSize / seconds > FLICK_HARD_DROP_CELLS_PER_SECOND;
     }
 
     private float getSwipeCellSize() {
+        // Stage units (one board cell / sensitivity), not screen pixels; compare with unprojected coordinates.
         return BlockActor.blockWidth / app.localPrefs.getSwipeSensitivity();
     }
 
@@ -349,7 +350,7 @@ public class PlayGesturesInput extends PlayScreenInput {
                 swipeDrawnTetrominos = swipeGameModel.getScore().getDrawnTetrominos();
                 swipeLastX = playScreen.getStage().getViewport().unproject(swipeCoordinates.set(screenX, screenY)).x;
                 swipeStartY = swipeCoordinates.y;
-                if (app.localPrefs.getSwipeDownHardDrop())
+                if (app.localPrefs.isSwipeDownHardDrop())
                     sampleSwipeVerticalTravel(TimeUtils.nanoTime());
             } else
                 setTouchPanel(screenX, screenY);
@@ -493,7 +494,7 @@ public class PlayGesturesInput extends PlayScreenInput {
         if (swipeMode) {
             playScreen.getStage().getViewport().unproject(swipeCoordinates.set(screenX, screenY));
             float cellSize = getSwipeCellSize();
-            if (app.localPrefs.getSwipeDownHardDrop())
+            if (app.localPrefs.isSwipeDownHardDrop())
                 sampleSwipeVerticalTravel(TimeUtils.nanoTime());
             if (swipeAxis == SwipeAxis.undecided) {
                 float dx = swipeCoordinates.x - swipeLastX;
@@ -551,6 +552,7 @@ public class PlayGesturesInput extends PlayScreenInput {
 
         float downTravel = swipeMode ? swipeStartY - swipeCoordinates.y : screenY - this.screenY;
         float softDropThreshold = swipeMode ? SWIPE_SOFT_DROP_CELLS * getSwipeCellSize() : dragThreshold;
+        // Swipe intentionally keeps the classic 300 ms soft-drop-start window.
         if (!beganHorizontalMove && downTravel > softDropThreshold && !beganSoftDrop
                 && timeSinceTouchDown <= MAX_SOFTDROPBEGINNING_INTERVAL) {
             beganSoftDrop = true;
@@ -600,6 +602,7 @@ public class PlayGesturesInput extends PlayScreenInput {
             return false;
 
         if (swipeMode) {
+            // Include the release position in final cell travel and flick sampling.
             touchDragged(screenX, screenY, pointer);
             if (!touchDownValid || !checkSwipeInput())
                 return true;

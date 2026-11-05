@@ -244,7 +244,7 @@ public class LocalPrefs {
         prefs.flush();
     }
 
-    public boolean getSwipeDownHardDrop() {
+    public boolean isSwipeDownHardDrop() {
         if (swipeDownHardDrop == null)
             swipeDownHardDrop = prefs.getBoolean("swipeDownHardDrop", false);
 
