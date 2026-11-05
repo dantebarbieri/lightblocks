@@ -613,6 +613,7 @@ public class PlayGesturesInput extends PlayScreenInput {
             }
         }
 
+        // Classic clears its 100 ms touch-down freeze; Swipe never starts that freeze.
         if (!swipeMode)
             playScreen.gameModel.setInputFreezeInterval(0);
 
