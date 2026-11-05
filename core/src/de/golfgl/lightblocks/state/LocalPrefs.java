@@ -68,6 +68,7 @@ public class LocalPrefs {
     private Boolean showTouchPanel;
     private Integer swipeUpType;
     private Boolean swipeDownHardDrop;
+    private Float swipeSensitivity;
     private Boolean gpgsAutoLogin;
     private Boolean dontAskForRating;
     private Integer blockColorMode;
@@ -253,6 +254,19 @@ public class LocalPrefs {
     public void setSwipeDownHardDrop(boolean swipeDownHardDrop) {
         this.swipeDownHardDrop = swipeDownHardDrop;
         prefs.putBoolean("swipeDownHardDrop", swipeDownHardDrop);
+        prefs.flush();
+    }
+
+    public float getSwipeSensitivity() {
+        if (swipeSensitivity == null)
+            swipeSensitivity = prefs.getFloat("swipeSensitivity", 1f);
+
+        return swipeSensitivity;
+    }
+
+    public void setSwipeSensitivity(float swipeSensitivity) {
+        this.swipeSensitivity = swipeSensitivity;
+        prefs.putFloat("swipeSensitivity", swipeSensitivity);
         prefs.flush();
     }
 
