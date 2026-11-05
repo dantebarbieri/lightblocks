@@ -313,6 +313,8 @@ public class SettingsScreen extends AbstractMenuDialog {
         Group touchPanel;
         private final Slider touchPanelSizeSlider;
         private final Table gestureSettings;
+        private final Button swipeDownHardDropCheckbox;
+        private final Cell<Button> swipeDownHardDropCell;
         private final Table onScreenGamepadSettings;
         private final Table onScreenButtonSettings;
 
@@ -437,6 +439,17 @@ public class SettingsScreen extends AbstractMenuDialog {
             gestureSettings.row().padTop(-10);
             gestureSettings.add(invertRotationCheckbox);
 
+            swipeDownHardDropCheckbox = new FaCheckbox(app.TEXTS.get("menuSwipeDownHardDrop"), app.skin);
+            swipeDownHardDropCheckbox.setChecked(app.localPrefs.getSwipeDownHardDrop());
+            swipeDownHardDropCheckbox.addListener(new ChangeListener() {
+                @Override
+                public void changed(ChangeEvent event, Actor actor) {
+                    app.localPrefs.setSwipeDownHardDrop(swipeDownHardDropCheckbox.isChecked());
+                }
+            });
+            gestureSettings.row();
+            swipeDownHardDropCell = gestureSettings.add();
+
             Button osbHelp = new RoundedTextButton(app.TEXTS.get("buttonHowToPlay"), app.skin);
             addFocusableActor(osbHelp);
             osbHelp.addListener(new ChangeListener() {
@@ -519,6 +532,7 @@ public class SettingsScreen extends AbstractMenuDialog {
             addFocusableActor(swipeUpButtons);
             addFocusableActor(hideHoldCheckbox);
             addFocusableActor(invertRotationCheckbox);
+            addFocusableActor(swipeDownHardDropCheckbox);
             addFocusableActor(showOsgHardDropButtonCheckbox);
             addFocusableActor(visualizePadStyle);
             addFocusableActor(opacitySlider);
@@ -526,6 +540,9 @@ public class SettingsScreen extends AbstractMenuDialog {
         }
 
         protected void setSettingsTableActor() {
+            boolean swipe = app.localPrefs.getUsedTouchControls() == LocalPrefs.TouchControlType.swipe;
+            swipeDownHardDropCell.setActor(swipe ? swipeDownHardDropCheckbox : null);
+            swipeDownHardDropCell.padTop(swipe ? 5 : 0);
             Actor actor;
             switch (app.localPrefs.getUsedTouchControls()) {
                 case onScreenButtonsGamepad:
@@ -538,6 +555,7 @@ public class SettingsScreen extends AbstractMenuDialog {
                     actor = gestureSettings;
             }
             settingsTableCell.setActor(actor);
+            settingsTableCell.height(gestureSettings.getPrefHeight());
         }
 
         protected void touchPanelSizeChanged() {

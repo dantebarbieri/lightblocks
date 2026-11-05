@@ -67,6 +67,7 @@ public class LocalPrefs {
     private Boolean playSounds;
     private Boolean showTouchPanel;
     private Integer swipeUpType;
+    private Boolean swipeDownHardDrop;
     private Boolean gpgsAutoLogin;
     private Boolean dontAskForRating;
     private Integer blockColorMode;
@@ -239,6 +240,19 @@ public class LocalPrefs {
     public void setSwipeUpType(Integer swipeUpType) {
         this.swipeUpType = swipeUpType;
         prefs.putInteger("swipeUpType", swipeUpType);
+        prefs.flush();
+    }
+
+    public boolean getSwipeDownHardDrop() {
+        if (swipeDownHardDrop == null)
+            swipeDownHardDrop = prefs.getBoolean("swipeDownHardDrop", false);
+
+        return swipeDownHardDrop;
+    }
+
+    public void setSwipeDownHardDrop(boolean swipeDownHardDrop) {
+        this.swipeDownHardDrop = swipeDownHardDrop;
+        prefs.putBoolean("swipeDownHardDrop", swipeDownHardDrop);
         prefs.flush();
     }
 
