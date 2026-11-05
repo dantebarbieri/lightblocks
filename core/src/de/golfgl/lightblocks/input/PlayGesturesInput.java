@@ -154,7 +154,7 @@ public class PlayGesturesInput extends PlayScreenInput {
             toDrop.setVisible(beganSoftDrop || timeSinceTouchDown <= MAX_SOFTDROPBEGINNING_INTERVAL);
 
         if (swipeMode && checkSwipeInput()) {
-            // Frozen updates leave the model's one-shot flag pending. Wait until it was consumed.
+            // Frozen update() skips one-shot flags and score time; issuing again would overwrite the pending move.
             if (swipeMoveIssued && swipeGameModel.getScore().getTimeMs() != swipeMoveTimeMs)
                 swipeMoveIssued = false;
             if (!swipeMoveIssued && swipeMoves.size > 0) {
@@ -174,6 +174,7 @@ public class PlayGesturesInput extends PlayScreenInput {
     }
 
     private GameModel getSwipeGameModel() {
+        // Local two-player games may assign touch to the second board.
         GameModel model = playScreen.gameModel;
         if (model.getFixedInputId() == null || model.getFixedInputId().isSameInput(inputId))
             return model;
@@ -185,10 +186,7 @@ public class PlayGesturesInput extends PlayScreenInput {
     private boolean checkSwipeInput() {
         if (swipeGameModel == null)
             return false;
-        if (isPaused() || app.getScreen() != playScreen
-                || app.localPrefs.getUsedTouchControls() != LocalPrefs.TouchControlType.swipe
-                || swipeGameModel.getFixedInputId() == null && buttonsHidden
-                || swipeGameModel != getSwipeGameModel() || swipeGameModel.isGameOver()
+        if (isPaused() || swipeGameModel.isGameOver()
                 || swipeNextTetromino != swipeGameModel.getNextTetromino()
                 || swipeDrawnTetrominos != swipeGameModel.getScore().getDrawnTetrominos()) {
             clearSwipeInput();
@@ -200,9 +198,11 @@ public class PlayGesturesInput extends PlayScreenInput {
     private void clearSwipeInput() {
         if (swipeGameModel != null) {
             if (swipeMoveIssued && swipeGameModel.getScore().getTimeMs() == swipeMoveTimeMs) {
+                // Cancel an unconsumed column before pause or a new touch can leave it pending.
                 playScreen.gameModel.inputEndMoveHorizontal(inputId, true);
                 playScreen.gameModel.inputEndMoveHorizontal(inputId, false);
             }
+            // Stop this piece's drop on cancellation without clearing the next piece's input.
             if ((beganSoftDrop || didHardDrop)
                     && swipeNextTetromino == swipeGameModel.getNextTetromino()
                     && swipeDrawnTetrominos == swipeGameModel.getScore().getDrawnTetrominos())
@@ -223,8 +223,6 @@ public class PlayGesturesInput extends PlayScreenInput {
         beganHorizontalMove = false;
         beganSoftDrop = false;
         didSomething = true;
-        if (touchPanel != null)
-            touchPanel.setVisible(false);
     }
 
     private void sampleSwipeVerticalTravel(long time) {
@@ -657,8 +655,6 @@ public class PlayGesturesInput extends PlayScreenInput {
     }
 
     void setButtonsHidden(boolean buttonsHidden) {
-        if (swipeMode && buttonsHidden && (swipeGameModel == null || swipeGameModel.getFixedInputId() == null))
-            clearSwipeInput();
         this.buttonsHidden = buttonsHidden;
     }
 
