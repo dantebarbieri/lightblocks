@@ -352,20 +352,7 @@ public class SettingsScreen extends AbstractMenuDialog {
                     touchPanelSizeChanged();
                 }
             });
-            final FaRadioButton<Integer> swipeUpButtons = new FaRadioButton<>(app.skin, false);
-            swipeUpButtons.addEntry(PlayGesturesInput.SWIPEUP_DONOTHING, "", app.TEXTS.get("menuSwipeUpToNothing"));
-            swipeUpButtons.addEntry(PlayGesturesInput.SWIPEUP_PAUSE, "", app.TEXTS.get("menuSwipeUpToPause"));
-            swipeUpButtons.addEntry(PlayGesturesInput.SWIPEUP_HARDDROP, "", app.TEXTS.get("menuSwipeUpToHardDrop"));
-            swipeUpButtons.addEntry(PlayGesturesInput.SWIPEUP_HOLD, "", app.TEXTS.get("menuSwipeUpToHold"));
-
-            swipeUpButtons.setValue(app.localPrefs.getSwipeUpType());
-            swipeUpButtons.addListener(new ChangeListener() {
-                                           public void changed(ChangeEvent event, Actor actor) {
-                                               if (actor == swipeUpButtons)
-                                                   app.localPrefs.setSwipeUpType(swipeUpButtons.getValue());
-                                           }
-                                       }
-            );
+            final FaRadioButton<Integer> swipeUpButtons = createSwipeUpButtons();
 
             pad(0, 20, 0, 20);
             defaults().expand().fillX();
@@ -402,40 +389,15 @@ public class SettingsScreen extends AbstractMenuDialog {
             gestureSettings.row().padTop(5);
             gestureSettings.add(touchPanelTable).top();
 
-            Table swipeUp = new Table();
-            ScaledLabel menuSwipeUpToLabel = new ScaledLabel(app.TEXTS.get("menuSwipeUpTo"), app.skin,
-                    LightBlocksGame.SKIN_FONT_TITLE);
-            menuSwipeUpToLabel.addListener(new ClickListener() {
-                @Override
-                public void clicked(InputEvent event, float x, float y) {
-                    swipeUpButtons.changeValue();
-                }
-            });
-            swipeUp.add(menuSwipeUpToLabel);
-            swipeUp.row().padTop(-5);
-            swipeUp.add(swipeUpButtons);
+            Table swipeUp = createSwipeUpSettings(swipeUpButtons);
             gestureSettings.row();
             gestureSettings.add(swipeUp);
 
             gestureSettings.row().padTop(5);
-            final Button hideHoldCheckbox = new FaCheckbox(app.TEXTS.get("menuHideHoldButton"), app.skin);
-            hideHoldCheckbox.setChecked(!app.localPrefs.isShowTouchHoldButton());
-            hideHoldCheckbox.addListener(new ChangeListener() {
-                @Override
-                public void changed(ChangeEvent event, Actor actor) {
-                    app.localPrefs.setShowTouchHoldButton(!hideHoldCheckbox.isChecked());
-                }
-            });
+            final Button hideHoldCheckbox = createHideHoldCheckbox();
             gestureSettings.add(hideHoldCheckbox);
 
-            final Button invertRotationCheckbox = new FaCheckbox(app.TEXTS.get("menuGesturesInvertRotation"), app.skin);
-            invertRotationCheckbox.setChecked(app.localPrefs.isInvertGesturesRotation());
-            invertRotationCheckbox.addListener(new ChangeListener() {
-                @Override
-                public void changed(ChangeEvent event, Actor actor) {
-                    app.localPrefs.setInvertGesturesRotation(invertRotationCheckbox.isChecked());
-                }
-            });
+            final Button invertRotationCheckbox = createInvertRotationCheckbox();
 
             gestureSettings.row().padTop(-10);
             gestureSettings.add(invertRotationCheckbox);
@@ -538,6 +500,64 @@ public class SettingsScreen extends AbstractMenuDialog {
             addFocusableActor(visualizePadStyle);
             addFocusableActor(opacitySlider);
             defaultFocusedButton = onScreenControlsButton;
+        }
+
+        private FaRadioButton<Integer> createSwipeUpButtons() {
+            final FaRadioButton<Integer> swipeUpButtons = new FaRadioButton<>(app.skin, false);
+            swipeUpButtons.addEntry(PlayGesturesInput.SWIPEUP_DONOTHING, "", app.TEXTS.get("menuSwipeUpToNothing"));
+            swipeUpButtons.addEntry(PlayGesturesInput.SWIPEUP_PAUSE, "", app.TEXTS.get("menuSwipeUpToPause"));
+            swipeUpButtons.addEntry(PlayGesturesInput.SWIPEUP_HARDDROP, "", app.TEXTS.get("menuSwipeUpToHardDrop"));
+            swipeUpButtons.addEntry(PlayGesturesInput.SWIPEUP_HOLD, "", app.TEXTS.get("menuSwipeUpToHold"));
+
+            swipeUpButtons.setValue(app.localPrefs.getSwipeUpType());
+            swipeUpButtons.addListener(new ChangeListener() {
+                                           public void changed(ChangeEvent event, Actor actor) {
+                                               if (actor == swipeUpButtons)
+                                                   app.localPrefs.setSwipeUpType(swipeUpButtons.getValue());
+                                           }
+                                       }
+            );
+            return swipeUpButtons;
+        }
+
+        private Table createSwipeUpSettings(final FaRadioButton<Integer> swipeUpButtons) {
+            Table swipeUp = new Table();
+            ScaledLabel menuSwipeUpToLabel = new ScaledLabel(app.TEXTS.get("menuSwipeUpTo"), app.skin,
+                    LightBlocksGame.SKIN_FONT_TITLE);
+            menuSwipeUpToLabel.addListener(new ClickListener() {
+                @Override
+                public void clicked(InputEvent event, float x, float y) {
+                    swipeUpButtons.changeValue();
+                }
+            });
+            swipeUp.add(menuSwipeUpToLabel);
+            swipeUp.row().padTop(-5);
+            swipeUp.add(swipeUpButtons);
+            return swipeUp;
+        }
+
+        private Button createHideHoldCheckbox() {
+            final Button hideHoldCheckbox = new FaCheckbox(app.TEXTS.get("menuHideHoldButton"), app.skin);
+            hideHoldCheckbox.setChecked(!app.localPrefs.isShowTouchHoldButton());
+            hideHoldCheckbox.addListener(new ChangeListener() {
+                @Override
+                public void changed(ChangeEvent event, Actor actor) {
+                    app.localPrefs.setShowTouchHoldButton(!hideHoldCheckbox.isChecked());
+                }
+            });
+            return hideHoldCheckbox;
+        }
+
+        private Button createInvertRotationCheckbox() {
+            final Button invertRotationCheckbox = new FaCheckbox(app.TEXTS.get("menuGesturesInvertRotation"), app.skin);
+            invertRotationCheckbox.setChecked(app.localPrefs.isInvertGesturesRotation());
+            invertRotationCheckbox.addListener(new ChangeListener() {
+                @Override
+                public void changed(ChangeEvent event, Actor actor) {
+                    app.localPrefs.setInvertGesturesRotation(invertRotationCheckbox.isChecked());
+                }
+            });
+            return invertRotationCheckbox;
         }
 
         protected void setSettingsTableActor() {
