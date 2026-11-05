@@ -97,7 +97,6 @@ public class PlayGesturesInput extends PlayScreenInput {
     private float swipeStartY;
     private float swipeLastX;
     private float swipeRemainder;
-    private int swipeDirection;
     private boolean swipeMoveIssued;
     private int swipeMoveTimeMs;
 
@@ -212,7 +211,6 @@ public class PlayGesturesInput extends PlayScreenInput {
         swipeNextTetromino = null;
         swipeMoveIssued = false;
         swipeRemainder = 0;
-        swipeDirection = 0;
         swipeAxis = SwipeAxis.undecided;
         swipeSampleTimes.clear();
         swipeSampleYs.clear();
@@ -490,9 +488,8 @@ public class PlayGesturesInput extends PlayScreenInput {
                 if (travel != 0) {
                     int direction = travel < 0 ? -1 : 1;
                     // Reversal starts measuring fresh travel, without an old fraction delaying it.
-                    if (direction != swipeDirection)
+                    if (swipeRemainder * direction < 0)
                         swipeRemainder = 0;
-                    swipeDirection = direction;
                     swipeRemainder += travel;
                     while (Math.abs(swipeRemainder) >= cellSize) {
                         swipeMoves.add(direction);
